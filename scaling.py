@@ -6,16 +6,32 @@ import time
 from functools import cache
 from itertools import repeat
 from typing import Callable
+from functools import partial
 
 import cv2 as cv
-import matplotlib.pyplot as plt
 import numpy as np
 import skimage
+import matplotlib.pyplot as plt
+
+
+def l(s: float) -> float:
+    # linear kernel for bilinear
+    s = abs(s)
+    if 0 <= s < 1:
+        return 1 - s
+    return 0.0
+
+
+def nn(s: float) -> float:
+    # nearest neighbor
+    if -0.5 <= s < 0.5:
+        return 1.0
+    return 0.0
 
 
 # cache seems to speed this up enough to be worth
 @cache
-def u(s: float):
+def bicubic(s: float) -> float:
     # bicubic convolution kernel aka catmull-rom spline
     # the value of a here is -0.5 as that was used in Keys' version
     a: float = -0.5
@@ -24,7 +40,61 @@ def u(s: float):
         return (a + 2) * s**3 - (a + 3) * s**2 + 1
     elif 1 <= s < 2:
         return a * s**3 - 5 * a * s**2 + 8 * a * s - 4 * a
-    return 0
+    return 0.0
+
+
+@cache
+def mn(B: float, C: float, x: float) -> float:
+    x = abs(x)
+
+    if x < 1:
+        return (1 / 6) * (
+            (12 - 9 * B - 6 * C) * x**3
+            + (-18 + 12 * B + 6 * C) * x**2
+            + (6 - 2 * B)
+        )
+    elif 1 <= x < 2:
+        return (1 / 6) * (
+            (-B - 6 * C) * x**3
+            + (6 * B + 30 * C) * x**2
+            + (-12 * B - 48 * C) * x
+            + (8 * B + 24 * C)
+        )
+
+    return 0.0
+
+
+def mitchell_nervali(B: float, C: float) -> Callable[[float], float]:
+    # mitchell nervali filter which can reprsent
+    # many different cubic splines based on B and C
+    # https://en.wikipedia.org/wiki/Mitchell%E2%80%93Netravali_filters
+
+    # It should be noted that the catmull-rom spline too
+    # can be represented with this with values B=0 and C=0.5.
+    # More specifically when B=0, C is just the -a value in Keys' kernel u
+
+    return partial(mn, B, C)
+
+
+def lanczos(x: float) -> float:
+    # lancozs kernel, which is more specifically
+    # a sinc filter windowed to a smaller size (here 2)
+    a = 2
+    if -a < x < a:
+        return float(np.sinc(x) * np.sinc(x / a))
+    return 0.0
+
+
+def plot_kernels(*kernels: Callable[[float], float]):
+    import matplotlib.pyplot as plt
+
+    xs = np.linspace(-4, 4, 500)
+    for kernel in kernels:
+        plt.plot(xs, [kernel(x) for x in xs], label=kernel.__name__)
+    plt.xlim(-4, 4)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 
 def scale_channel(
@@ -81,10 +151,12 @@ def scale_channel(
 def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
     im_data = cv.imread(str(in_file))
 
-    # im_data = cv.cvtColor(im_data, cv.COLOR_RGB2BGR)
+    im_data = cv.cvtColor(im_data, cv.COLOR_RGB2BGR)
 
     start = time.perf_counter()
     print("Scaling image...")
+
+    # plot_kernels(bicubic, l, nn, lanczos, mitchell_nervali(B=0, C=0.75))
 
     H, W, C = im_data.shape
 
@@ -94,6 +166,9 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
     channels = cv.split(im_data_p)
 
     out_im_data: np.ndarray = np.zeros(1)
+
+    # change kernel here
+    kernel_to_use: Callable[[float], float] = bicubic
 
     # scaling images with big sizes can take a long time
     # and with how slow this implementation is
@@ -109,12 +184,15 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
                     repeat(ratio),
                     repeat(H),
                     repeat(W),
-                    repeat(u),
+                    repeat(kernel_to_use),
                 )
             )
         )
 
     print(f"Finished scaling in {time.perf_counter() - start} seconds")
+
+    plt.imshow(out_im_data)
+    plt.show()
 
     # print(im_data.min(), im_data.max(), im_data.dtype, im_data.shape)
     # print(out_im_data.min(), out_im_data.max(), out_im_data.dtype, out_im_data.shape)
