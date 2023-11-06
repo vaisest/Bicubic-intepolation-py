@@ -122,6 +122,44 @@ def scale_channel(
             ix = int(x)
             decx = ix - x
 
+            # # It should be noted that bicubic is just cubic, but in two dimensions.
+            # # So this can be calculated by interpolating four intermediate points in the x direction
+            # # and then interpolating from those in the y direction:
+            # p_1 = (
+            #     image[iy - 1, ix + (-1)] * u(decx - 1)
+            #     + image[iy - 1, ix] * u(decx)
+            #     + image[iy - 1, ix + 1] * u(decx + 1)
+            #     + image[iy - 1, ix + 2] * u(decx + 2)
+            # )
+
+            # p_2 = (
+            #     image[iy, ix + (-1)] * u(decx - 1)
+            #     + image[iy, ix] * u(decx)
+            #     + image[iy, ix + 1] * u(decx + 1)
+            #     + image[iy, ix + 2] * u(decx + 2)
+            # )
+
+            # p_3 = (
+            #     image[iy + 1, ix + (-1)] * u(decx - 1)
+            #     + image[iy + 1, ix] * u(decx)
+            #     + image[iy + 1, ix + 1] * u(decx + 1)
+            #     + image[iy + 1, ix + 2] * u(decx + 2)
+            # )
+
+            # p_4 = (
+            #     image[iy + 2, ix + (-1)] * u(decx - 1)
+            #     + image[iy + 2, ix] * u(decx)
+            #     + image[iy + 2, ix + 1] * u(decx + 1)
+            #     + image[iy + 2, ix + 2] * u(decx + 2)
+            # )
+
+            # pix = (
+            #     p_1 * u(decy - 1)
+            #     + p_2 * u(decy)
+            #     + p_3 * u(decy + 1)
+            #     + p_4 * u(decy + 2)
+            # )
+
             pix = sum(
                 sum(
                     image[iy + M, ix + L] * u(decx + L) * u(decy + M)
