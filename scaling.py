@@ -64,8 +64,8 @@ def mn(B: float, C: float, x: float) -> float:
     return 0.0
 
 
-def mitchell_nervali(B: float, C: float) -> Callable[[float], float]:
-    # mitchell nervali filter which can reprsent
+def mitchell_netravali(B: float, C: float) -> Callable[[float], float]:
+    # mitchell netravali filter which can reprsent
     # many different cubic splines based on B and C
     # https://en.wikipedia.org/wiki/Mitchell%E2%80%93Netravali_filters
 
@@ -184,7 +184,7 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
     start = time.perf_counter()
     print("Scaling image...")
 
-    # plot_kernels(bicubic, l, nn, lanczos, mitchell_nervali(B=0, C=0.75))
+    # plot_kernels(bicubic, l, nn, lanczos, mitchell_netravali(B=0, C=0.75))
 
     H, W, C = im_data.shape
 
