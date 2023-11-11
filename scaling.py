@@ -14,7 +14,7 @@ import skimage
 import matplotlib.pyplot as plt
 
 
-def l(s: float) -> float:
+def bilinear(s: float) -> float:
     # linear kernel for bilinear
     s = abs(s)
     if 0 <= s < 1:
@@ -178,8 +178,8 @@ def scale_channel(
 def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
     im_data = cv.imread(str(in_file))
 
-    # because plt uses rgb
-    im_data = cv.cvtColor(im_data, cv.COLOR_RGB2BGR)
+    # # because plt uses rgb
+    # im_data = cv.cvtColor(im_data, cv.COLOR_RGB2BGR)
 
     start = time.perf_counter()
     print("Scaling image...")
@@ -219,56 +219,58 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
 
     print(f"Finished scaling in {time.perf_counter() - start} seconds")
 
-    plt.imshow(out_im_data)
-    plt.show()
+    cv.imwrite(str(out_file), out_im_data)
+
+    # plt.imshow(out_im_data)
+    # plt.show()
 
     # print(im_data.min(), im_data.max(), im_data.dtype, im_data.shape)
     # print(out_im_data.min(), out_im_data.max(), out_im_data.dtype, out_im_data.shape)
-    proper_cv = cv.resize(im_data, None, None, ratio, ratio, cv.INTER_CUBIC)
-    proper_skimage = skimage.util.img_as_ubyte(
-        skimage.transform.rescale(im_data, ratio, channel_axis=-1, order=3)
-    )
-    # # print(proper.min(), proper.max(), proper.dtype, proper.shape)
+    # proper_cv = cv.resize(im_data, None, None, ratio, ratio, cv.INTER_CUBIC)
+    # proper_skimage = skimage.util.img_as_ubyte(
+    #     skimage.transform.rescale(im_data, ratio, channel_axis=-1, order=3)
+    # )
+    # # # print(proper.min(), proper.max(), proper.dtype, proper.shape)
 
-    fig, ax = plt.subplots(nrows=4, ncols=2)
-    ax[0, 0].imshow(im_data)
-    ax[0, 0].set_title("Original")
-    ax[0, 1].imshow(out_im_data)
-    ax[0, 1].set_title("My scale")
+    # fig, ax = plt.subplots(nrows=4, ncols=2)
+    # ax[0, 0].imshow(im_data)
+    # ax[0, 0].set_title("Original")
+    # ax[0, 1].imshow(out_im_data)
+    # ax[0, 1].set_title("My scale")
 
-    ax[1, 0].set_title("Proper OpenCV")
-    ax[1, 0].imshow(proper_cv)
-    ax[1, 1].set_title("Proper Skimage")
-    ax[1, 1].imshow(proper_cv)
+    # ax[1, 0].set_title("Proper OpenCV")
+    # ax[1, 0].imshow(proper_cv)
+    # ax[1, 1].set_title("Proper Skimage")
+    # ax[1, 1].imshow(proper_cv)
 
-    print("my scale vs proper_cv psnr:", cv.PSNR(out_im_data, proper_cv))
+    # print("my scale vs proper_cv psnr:", cv.PSNR(out_im_data, proper_cv))
 
-    ax[2, 0].set_title("Absdiff OpenCV vs My")
-    diffy_cv = cv.absdiff(out_im_data, proper_cv)
-    ax[2, 0].imshow(diffy_cv)
-    ax[2, 1].set_title("Absdiff Skimage vs My")
-    diffy_skimage = cv.absdiff(out_im_data, proper_skimage)
-    ax[2, 1].imshow(diffy_skimage)
+    # ax[2, 0].set_title("Absdiff OpenCV vs My")
+    # diffy_cv = cv.absdiff(out_im_data, proper_cv)
+    # ax[2, 0].imshow(diffy_cv)
+    # ax[2, 1].set_title("Absdiff Skimage vs My")
+    # diffy_skimage = cv.absdiff(out_im_data, proper_skimage)
+    # ax[2, 1].imshow(diffy_skimage)
 
-    ax[3, 1].set_title("Absdiff CV vs Skimage")
-    ax[3, 1].imshow(cv.absdiff(proper_cv, proper_skimage))
-    ax[3, 0].set_title("Absdiff CV vs Skimage")
-    ax[3, 0].imshow(cv.absdiff(proper_cv, proper_skimage))
+    # ax[3, 1].set_title("Absdiff CV vs Skimage")
+    # ax[3, 1].imshow(cv.absdiff(proper_cv, proper_skimage))
+    # ax[3, 0].set_title("Absdiff CV vs Skimage")
+    # ax[3, 0].imshow(cv.absdiff(proper_cv, proper_skimage))
 
-    print("diffy_cv", diffy_cv.min(), diffy_cv.max(), diffy_cv.dtype, diffy_cv.shape)
-    print(
-        "diffy_skimage",
-        diffy_skimage.min(),
-        diffy_skimage.max(),
-        diffy_skimage.dtype,
-        diffy_skimage.shape,
-    )
-    print(
-        "proper_skimage vs proper_opencv psnr:",
-        cv.PSNR(out_im_data, proper_cv),
-        cv.absdiff(proper_cv, proper_skimage).max(),
-    )
-    plt.show()
+    # print("diffy_cv", diffy_cv.min(), diffy_cv.max(), diffy_cv.dtype, diffy_cv.shape)
+    # print(
+    #     "diffy_skimage",
+    #     diffy_skimage.min(),
+    #     diffy_skimage.max(),
+    #     diffy_skimage.dtype,
+    #     diffy_skimage.shape,
+    # )
+    # print(
+    #     "proper_skimage vs proper_opencv psnr:",
+    #     cv.PSNR(out_im_data, proper_cv),
+    #     cv.absdiff(proper_cv, proper_skimage).max(),
+    # )
+    # plt.show()
 
 
 if __name__ == "__main__":
@@ -277,8 +279,8 @@ if __name__ == "__main__":
         description="This program implements the bicubic convolution interpolation image scaling algorithm.",
     )
     arg_parser.add_argument("in_file", type=pathlib.Path)
-    arg_parser.add_argument("scaling_ratio", type=float, nargs="?", default=2.0)
     arg_parser.add_argument("out_file", type=pathlib.Path, nargs="?")
+    arg_parser.add_argument("scaling_ratio", type=float, nargs="?", default=4.0)
 
     args = arg_parser.parse_args()
 
