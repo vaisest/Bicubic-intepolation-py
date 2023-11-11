@@ -34,7 +34,7 @@ def nn(s: float) -> float:
 def bicubic(s: float) -> float:
     # bicubic convolution kernel aka catmull-rom spline
     # the value of a here is -0.5 as that was used in Keys' version
-    a: float = -0.75
+    a: float = -0.5
     s = abs(s)
     if 0 <= s < 1:
         return (a + 2) * s**3 - (a + 3) * s**2 + 1
@@ -129,57 +129,35 @@ def scale_channel(
             x = ((i + 0.5) / ratio) - 0.5
             ix = int(x)
             decx = ix - x
-            # print(i, x, ix, decx)
-            # if i > 4:
-            #     exit()
-
-            # # It should be noted that bicubic is just cubic, but in two dimensions.
-            # # So this can be calculated by interpolating four intermediate points in the x direction
-            # # and then interpolating from those in the y direction:
-            # p_1 = (
-            #     image[iy - 1, ix + (-1)] * u(decx - 1)
-            #     + image[iy - 1, ix] * u(decx)
-            #     + image[iy - 1, ix + 1] * u(decx + 1)
-            #     + image[iy - 1, ix + 2] * u(decx + 2)
-            # )
-
-            # p_2 = (
-            #     image[iy, ix + (-1)] * u(decx - 1)
-            #     + image[iy, ix] * u(decx)
-            #     + image[iy, ix + 1] * u(decx + 1)
-            #     + image[iy, ix + 2] * u(decx + 2)
-            # )
-
-            # p_3 = (
-            #     image[iy + 1, ix + (-1)] * u(decx - 1)
-            #     + image[iy + 1, ix] * u(decx)
-            #     + image[iy + 1, ix + 1] * u(decx + 1)
-            #     + image[iy + 1, ix + 2] * u(decx + 2)
-            # )
-
-            # p_4 = (
-            #     image[iy + 2, ix + (-1)] * u(decx - 1)
-            #     + image[iy + 2, ix] * u(decx)
-            #     + image[iy + 2, ix + 1] * u(decx + 1)
-            #     + image[iy + 2, ix + 2] * u(decx + 2)
-            # )
-
-            # pix = (
-            #     p_1 * u(decy - 1)
-            #     + p_2 * u(decy)
-            #     + p_3 * u(decy + 1)
-            #     + p_4 * u(decy + 2)
-            # )
 
             pix = sum(
-                sum(  # clamp indexes to source image range, but kernel u distances are not clamped
+                sum(  # clamp indexes to source image range, because image is not padded
                     image[clamp(iy + M, 0, H - 1), clamp(ix + L, 0, W - 1)]
-                    * u(decx + L)
+                    * u(decx + L)  # kernel u distances are not clamped
                     * u(decy + M)
                     for L in range(-1, 2 + 1)
                 )
                 for M in range(-1, 2 + 1)
             )
+
+            # # It should be noted that bicubic is just cubic, but in two dimensions.
+            # # So this can be calculated by interpolating four intermediate points in the x direction
+            # ps = [
+            #     sum(
+            #         image[clamp(iy + M, 0, H - 1), clamp(ix + L, 0, W - 1)]
+            #         * u(decx + L)
+            #         for L in range(-1, 2 + 1)
+            #     )
+            #     for M in range(-1, 2 + 1)
+            # ]
+
+            # # and then interpolating from those in the y direction:
+            # pix = (
+            #     ps[0] * u(decy - 1)
+            #     + ps[1] * u(decy)
+            #     + ps[2] * u(decy + 1)
+            #     + ps[3] * u(decy + 2)
+            # )
 
             # we limit results to [0, 1] because bicubic interpolation
             # can produce pixel values outside the original range
@@ -193,7 +171,7 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
     im_data = cv.imread(str(in_file))
 
     # # because plt uses rgb
-    im_data = cv.cvtColor(im_data, cv.COLOR_RGB2BGR)
+    # im_data = cv.cvtColor(im_data, cv.COLOR_RGB2BGR)
 
     start = time.perf_counter()
     print("Scaling image...")
@@ -202,10 +180,6 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
 
     H, W, C = im_data.shape
 
-    # pad by 2 px
-    # im_data_p = cv.copyMakeBorder(im_data, 2, 2, 2, 2, cv.BORDER_REFLECT)
-
-    # channels = cv.split(im_data_p)
     channels = cv.split(im_data)
     # channels = cv.split(im_data[:, :, 0])
 
@@ -240,65 +214,65 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
     # plt.imshow(out_im_data)
     # plt.show()
 
-    print(im_data.min(), im_data.max(), im_data.dtype, im_data.shape)
-    print(out_im_data.min(), out_im_data.max(), out_im_data.dtype, out_im_data.shape)
-    proper_cv = cv.resize(im_data, None, None, ratio, ratio, cv.INTER_CUBIC)
-    proper_skimage = skimage.util.img_as_ubyte(
-        skimage.transform.rescale(im_data, ratio, channel_axis=-1, order=3)
-    )
-    # # print(proper.min(), proper.max(), proper.dtype, proper.shape)
+    # print(im_data.min(), im_data.max(), im_data.dtype, im_data.shape)
+    # print(out_im_data.min(), out_im_data.max(), out_im_data.dtype, out_im_data.shape)
+    # proper_cv = cv.resize(im_data, None, None, ratio, ratio, cv.INTER_CUBIC)
+    # proper_skimage = skimage.util.img_as_ubyte(
+    #     skimage.transform.rescale(im_data, ratio, channel_axis=-1, order=3)
+    # )
+    # # # print(proper.min(), proper.max(), proper.dtype, proper.shape)
 
-    fig, ax = plt.subplots(nrows=4, ncols=2)
-    ax[0, 0].imshow(im_data)
-    ax[0, 0].set_title("Original")
-    ax[0, 1].imshow(out_im_data)
-    ax[0, 1].set_title("My scale")
+    # fig, ax = plt.subplots(nrows=4, ncols=2)
+    # ax[0, 0].imshow(im_data)
+    # ax[0, 0].set_title("Original")
+    # ax[0, 1].imshow(out_im_data)
+    # ax[0, 1].set_title("My scale")
 
-    ax[1, 0].set_title("Proper OpenCV")
-    ax[1, 0].imshow(proper_cv)
-    ax[1, 1].set_title("Proper Skimage")
-    ax[1, 1].imshow(proper_cv)
+    # ax[1, 0].set_title("Proper OpenCV")
+    # ax[1, 0].imshow(proper_cv)
+    # ax[1, 1].set_title("Proper Skimage")
+    # ax[1, 1].imshow(proper_cv)
 
-    print("my scale vs proper_cv psnr:", cv.PSNR(out_im_data, proper_cv))
+    # print("my scale vs proper_cv psnr:", cv.PSNR(out_im_data, proper_cv))
 
-    ax[2, 0].set_title("Absdiff OpenCV vs My")
-    diffy_cv = cv.absdiff(out_im_data, proper_cv)
-    ax[2, 0].imshow(diffy_cv)
-    ax[2, 1].set_title("Absdiff Skimage vs My")
-    diffy_skimage = cv.absdiff(out_im_data, proper_skimage)
-    ax[2, 1].imshow(diffy_skimage)
+    # ax[2, 0].set_title("Absdiff OpenCV vs My")
+    # diffy_cv = cv.absdiff(out_im_data, proper_cv)
+    # ax[2, 0].imshow(diffy_cv)
+    # ax[2, 1].set_title("Absdiff Skimage vs My")
+    # diffy_skimage = cv.absdiff(out_im_data, proper_skimage)
+    # ax[2, 1].imshow(diffy_skimage)
 
-    ax[3, 0].set_title("diffy-cv nonzero locations")
-    nz = np.zeros(diffy_cv.shape, np.uint8)
-    for a, b, c in zip(*diffy_cv.nonzero()):
-        # print(a, b, c)
-        nz[a, b, c] = 255
-    print(nz)
-    ax[3, 0].imshow(nz)
-    ax[3, 1].set_title("Absdiff CV vs Skimage")
-    ax[3, 1].imshow(cv.absdiff(proper_cv, proper_skimage))
+    # ax[3, 0].set_title("diffy-cv nonzero locations")
+    # nz = np.zeros(diffy_cv.shape, np.uint8)
+    # for a, b, c in zip(*diffy_cv.nonzero()):
+    #     # print(a, b, c)
+    #     nz[a, b, c] = 255
+    # print(nz)
+    # ax[3, 0].imshow(nz)
+    # ax[3, 1].set_title("Absdiff CV vs Skimage")
+    # ax[3, 1].imshow(cv.absdiff(proper_cv, proper_skimage))
 
-    print(
-        "diffy_cv",
-        diffy_cv.min(),
-        diffy_cv.max(),
-        diffy_cv.dtype,
-        diffy_cv.shape,
-        diffy_cv.nonzero(),
-    )
-    print(
-        "diffy_skimage",
-        diffy_skimage.min(),
-        diffy_skimage.max(),
-        diffy_skimage.dtype,
-        diffy_skimage.shape,
-    )
-    print(
-        "proper_skimage vs proper_opencv psnr:",
-        cv.PSNR(out_im_data, proper_cv),
-        cv.absdiff(proper_cv, proper_skimage).max(),
-    )
-    plt.show()
+    # print(
+    #     "diffy_cv",
+    #     diffy_cv.min(),
+    #     diffy_cv.max(),
+    #     diffy_cv.dtype,
+    #     diffy_cv.shape,
+    #     diffy_cv.nonzero(),
+    # )
+    # print(
+    #     "diffy_skimage",
+    #     diffy_skimage.min(),
+    #     diffy_skimage.max(),
+    #     diffy_skimage.dtype,
+    #     diffy_skimage.shape,
+    # )
+    # print(
+    #     "proper_skimage vs proper_opencv psnr:",
+    #     cv.PSNR(out_im_data, proper_cv),
+    #     cv.absdiff(proper_cv, proper_skimage).max(),
+    # )
+    # plt.show()
 
 
 if __name__ == "__main__":
