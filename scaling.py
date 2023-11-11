@@ -5,7 +5,7 @@ import pathlib
 import time
 from functools import cache
 from itertools import repeat
-from typing import Callable
+from typing import Callable, TypeVar
 from functools import partial
 
 import cv2 as cv
@@ -34,7 +34,7 @@ def nn(s: float) -> float:
 def bicubic(s: float) -> float:
     # bicubic convolution kernel aka catmull-rom spline
     # the value of a here is -0.5 as that was used in Keys' version
-    a: float = -0.5
+    a: float = -0.75
     s = abs(s)
     if 0 <= s < 1:
         return (a + 2) * s**3 - (a + 3) * s**2 + 1
@@ -97,6 +97,14 @@ def plot_kernels(*kernels: Callable[[float], float]):
     plt.show()
 
 
+T = TypeVar("T", int, float)
+
+
+def clamp(n: T, a: T, b: T) -> T:
+    # clamps n to [a, b]
+    return min(b, max(n, a))
+
+
 def scale_channel(
     image: np.ndarray, ratio: float, H: int, W: int, u: Callable[[float], float]
 ) -> np.ndarray:
@@ -109,18 +117,21 @@ def scale_channel(
 
     for j in range(new_H):
         # scale new image's coordinate to be in old image based on its midpoint
-        y = (j) * (1 / ratio) + 2
+        y = ((j + 0.5) / ratio) - 0.5
         # we separate x and y to integer and fractional parts
         iy = int(y)
         # ix and iy are essentially the closest original pixels
         # as all the old pixels are in integer positions
-        # decx and decy as the fractional parts are then the distances
+        # decx and decy as the fractional parts are then the (negative) distances
         # to the original pixels on the left and above
         decy = iy - y
         for i in range(new_W):
-            x = (i - (0.25)) * (1 / ratio) + 2
+            x = ((i + 0.5) / ratio) - 0.5
             ix = int(x)
             decx = ix - x
+            # print(i, x, ix, decx)
+            # if i > 4:
+            #     exit()
 
             # # It should be noted that bicubic is just cubic, but in two dimensions.
             # # So this can be calculated by interpolating four intermediate points in the x direction
@@ -161,8 +172,10 @@ def scale_channel(
             # )
 
             pix = sum(
-                sum(
-                    image[iy + M, ix + L] * u(decx + L) * u(decy + M)
+                sum(  # clamp indexes to source image range, but kernel u distances are not clamped
+                    image[clamp(iy + M, 0, H - 1), clamp(ix + L, 0, W - 1)]
+                    * u(decx + L)
+                    * u(decy + M)
                     for L in range(-1, 2 + 1)
                 )
                 for M in range(-1, 2 + 1)
@@ -170,7 +183,7 @@ def scale_channel(
 
             # we limit results to [0, 1] because bicubic interpolation
             # can produce pixel values outside the original range
-            big_image[j, i] = max(min(1, pix), 0)
+            big_image[j, i] = clamp(pix, 0.0, 1.0)
 
     # without rounding there are various 1 pixel differences
     return (big_image * 255).round().astype(np.uint8)
@@ -190,9 +203,11 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
     H, W, C = im_data.shape
 
     # pad by 2 px
-    im_data_p = cv.copyMakeBorder(im_data, 2, 2, 2, 2, cv.BORDER_REFLECT)
+    # im_data_p = cv.copyMakeBorder(im_data, 2, 2, 2, 2, cv.BORDER_REFLECT)
 
-    channels = cv.split(im_data_p)
+    # channels = cv.split(im_data_p)
+    channels = cv.split(im_data)
+    # channels = cv.split(im_data[:, :, 0])
 
     out_im_data: np.ndarray = np.zeros(1)
 
@@ -253,12 +268,24 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
     diffy_skimage = cv.absdiff(out_im_data, proper_skimage)
     ax[2, 1].imshow(diffy_skimage)
 
+    ax[3, 0].set_title("diffy-cv nonzero locations")
+    nz = np.zeros(diffy_cv.shape, np.uint8)
+    for a, b, c in zip(*diffy_cv.nonzero()):
+        # print(a, b, c)
+        nz[a, b, c] = 255
+    print(nz)
+    ax[3, 0].imshow(nz)
     ax[3, 1].set_title("Absdiff CV vs Skimage")
     ax[3, 1].imshow(cv.absdiff(proper_cv, proper_skimage))
-    ax[3, 0].set_title("Absdiff CV vs Skimage")
-    ax[3, 0].imshow(cv.absdiff(proper_cv, proper_skimage))
 
-    print("diffy_cv", diffy_cv.min(), diffy_cv.max(), diffy_cv.dtype, diffy_cv.shape)
+    print(
+        "diffy_cv",
+        diffy_cv.min(),
+        diffy_cv.max(),
+        diffy_cv.dtype,
+        diffy_cv.shape,
+        diffy_cv.nonzero(),
+    )
     print(
         "diffy_skimage",
         diffy_skimage.min(),
