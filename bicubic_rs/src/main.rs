@@ -17,7 +17,6 @@ struct Opt {
     ratio: f32,
 }
 
-// #[inline(never)]
 fn bicubic(_s: f32) -> f32 {
     let a = -0.5f32;
     let s = _s.abs();
@@ -69,51 +68,8 @@ fn pad(img: &Rgb32FImage) -> Rgb32FImage {
     return dest;
 }
 
-// #[inline(never)] TODO: TEST PADDING SPEED
-pub unsafe fn scale<F>(img: &Rgb32FImage, ratio: f32, u: F) -> Rgb32FImage
-where
-    F: Fn(f32) -> f32,
-{
-    let new_w = ((img.width() as f32) * ratio) as u32;
-    let new_h = ((img.height() as f32) * ratio) as u32;
-
-    let dest = Rgb32FImage::from_fn(new_w, new_h, |i, j| {
-        let y = (j as f32 + 0.5) * (1.0 / ratio) - 0.5;
-        let iy = y as i32;
-        let decy = y.trunc() - y;
-
-        let x = (i as f32 + 0.5) * (1.0 / ratio) - 0.5;
-        let ix = x as i32;
-        let decx = x.trunc() - x;
-
-        let pix: Rgb<f32> = (-1i32..=2)
-            .map(|m: i32| {
-                return (-1i32..=2)
-                    .map(|l| {
-                        let p = img
-                            .get_pixel(
-                                (ix + l).clamp(0, img.width() as i32 - 1) as u32,
-                                (iy + m).clamp(0, img.height() as i32 - 1) as u32,
-                            )
-                            .map(|v| v * u(decx + l as f32) * u(decy + m as f32));
-                        return p;
-                    })
-                    .fold(Rgb([0.0, 0.0, 0.0]), |a, b| {
-                        return Rgb([a[0] + b[0], a[1] + b[1], a[2] + b[2]]);
-                    });
-            })
-            .fold(Rgb([0.0, 0.0, 0.0]), |a, b| {
-                return Rgb([a[0] + b[0], a[1] + b[1], a[2] + b[2]]);
-            })
-            .map(|n| n.clamp(0.0, 1.0));
-
-        return pix;
-    });
-    return dest;
-}
-
 // unsafe because input should be padded where oob is not possible
-pub unsafe fn scaledpad<F>(img: &Rgb32FImage, ratio: f32, u: F) -> Rgb32FImage
+pub unsafe fn scale_padded<F>(img: &Rgb32FImage, ratio: f32, u: F) -> Rgb32FImage
 where
     F: Fn(f32) -> f32,
 {
@@ -174,19 +130,12 @@ fn main() {
     let padded = pad(&input_img);
     let scaled: Rgb32FImage;
     unsafe {
-        scaled = scaledpad(&padded, opt.ratio, bicubic);
+        scaled = scale_padded(&padded, opt.ratio, bicubic);
     }
     println!(
         "Finished scaling in {:?} seconds",
         timer.elapsed().as_secs_f32()
     );
-    // let timer = Instant::now();
-    // let scaled = scale(&input_img, opt.ratio, bicubic);
-
-    // println!(
-    //     "Finished scaling in {:?} seconds",
-    //     timer.elapsed().as_secs_f32()
-    // );
 
     (DynamicImage::ImageRgb32F(scaled).into_rgb8())
         .save(opt.output_path)
