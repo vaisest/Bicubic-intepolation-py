@@ -97,15 +97,6 @@ def plot_kernels(*kernels: Callable[[float], float]):
     plt.show()
 
 
-T = TypeVar("T", int, float)
-
-
-def clamp(n: T, a: T, b: T) -> T:
-    # clamps n to [a, b].
-    # Slow, but what can you do
-    return min(b, max(n, a))
-
-
 def scale_channel(
     image: np.ndarray, ratio: float, u: Callable[[float], float]
 ) -> np.ndarray:
@@ -113,13 +104,13 @@ def scale_channel(
 
     H, W = image.shape
     # create new image
-    new_H = math.floor(H * ratio)
-    new_W = math.floor(W * ratio)
+    new_H = math.floor((H - 4) * ratio)
+    new_W = math.floor((W - 4) * ratio)
     big_image = np.zeros((new_H, new_W))
 
     for j in range(new_H):
         # scale new image's coordinate to be in old image based on its midpoint
-        y = ((j + 0.5) / ratio) - 0.5
+        y = ((j + 0.5) / ratio) - 0.5 + 2
         # we separate x and y to integer and fractional parts
         iy = int(y)
         # ix and iy are essentially the closest original pixels
@@ -128,17 +119,13 @@ def scale_channel(
         # to the original pixels on the left and above
         decy = iy - y
         for i in range(new_W):
-            x = ((i + 0.5) / ratio) - 0.5
+            x = ((i + 0.5) / ratio) - 0.5 + 2
             ix = int(x)
             decx = ix - x
 
             pix = sum(
-                sum(  # clamp indexes to source image range, because image is not padded
-                    image[clamp(iy + M, 0, H - 1), clamp(ix + L, 0, W - 1)]
-                    * u(decx + L)  # kernel u distances are not clamped
-                    * u(decy + M)
-                    for L in range(-1, 2 + 1)
-                )
+                image[iy + M, ix + L] * u(decx + L) * u(decy + M)
+                for L in range(-1, 2 + 1)
                 for M in range(-1, 2 + 1)
             )
 
@@ -161,12 +148,13 @@ def scale_channel(
             #     + ps[3] * u(decy + 2)
             # )
 
-            # we limit results to [0, 1] because bicubic interpolation
-            # can produce pixel values outside the original range
-            big_image[j, i] = clamp(pix, 0.0, 1.0)
+            big_image[j, i] = pix
 
-    # without rounding there are various 1 pixel differences
-    return (big_image * 255).round().astype(np.uint8)
+    # we limit results to [0, 1] because bicubic interpolation
+    # can produce pixel values outside the original range
+    # and without rounding there are various 1 pixel differences
+    return (np.clip(big_image, 0.0, 1.0) * 255).round().astype(np.uint8)
+    # return (big_image * 255).round().astype(np.uint8)
 
 
 def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
@@ -183,8 +171,10 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
 
     print(f"Scaling image from {H}x{W} to {int(H*ratio)}x{int(W*ratio)}...")
 
-    channels = cv.split(im_data)
-    # channels = cv.split(im_data[:, :, 0])
+    padded = cv.copyMakeBorder(im_data, 2, 2, 2, 2, cv.BORDER_REPLICATE)
+    padded = im_data
+
+    channels = cv.split(padded)
 
     out_im_data: np.ndarray = np.zeros(1)
 
@@ -208,6 +198,7 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
             )
         )
 
+    # # single thread
     # out_im_data = cv.merge(
     #     list(scale_channel(channels[c], ratio, kernel_to_use) for c in range(C))
     # )

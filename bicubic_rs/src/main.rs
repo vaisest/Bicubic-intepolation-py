@@ -17,6 +17,7 @@ struct Opt {
     ratio: f32,
 }
 
+//TODO: rest of the filters
 fn bicubic(_s: f32) -> f32 {
     let a = -0.5f32;
     let s = _s.abs();
