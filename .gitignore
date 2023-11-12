@@ -1,5 +1,6 @@
 test_*.png
 .vscode/
+.cargo/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
