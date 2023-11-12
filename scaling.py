@@ -101,15 +101,17 @@ T = TypeVar("T", int, float)
 
 
 def clamp(n: T, a: T, b: T) -> T:
-    # clamps n to [a, b]
+    # clamps n to [a, b].
+    # Slow, but what can you do
     return min(b, max(n, a))
 
 
 def scale_channel(
-    image: np.ndarray, ratio: float, H: int, W: int, u: Callable[[float], float]
+    image: np.ndarray, ratio: float, u: Callable[[float], float]
 ) -> np.ndarray:
     image = image.astype(np.float64) / 255
 
+    H, W = image.shape
     # create new image
     new_H = math.floor(H * ratio)
     new_W = math.floor(W * ratio)
@@ -174,11 +176,12 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
     # im_data = cv.cvtColor(im_data, cv.COLOR_RGB2BGR)
 
     start = time.perf_counter()
-    print("Scaling image...")
 
     # plot_kernels(bicubic, l, nn, lanczos, mitchell_netravali(B=0, C=0.75))
 
     H, W, C = im_data.shape
+
+    print(f"Scaling image from {H}x{W} to {int(H*ratio)}x{int(W*ratio)}...")
 
     channels = cv.split(im_data)
     # channels = cv.split(im_data[:, :, 0])
@@ -200,79 +203,18 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
                     scale_channel,
                     channels,
                     repeat(ratio),
-                    repeat(H),
-                    repeat(W),
                     repeat(kernel_to_use),
                 )
             )
         )
 
+    # out_im_data = cv.merge(
+    #     list(scale_channel(channels[c], ratio, kernel_to_use) for c in range(C))
+    # )
+
     print(f"Finished scaling in {time.perf_counter() - start} seconds")
 
     cv.imwrite(str(out_file), out_im_data)
-
-    # plt.imshow(out_im_data)
-    # plt.show()
-
-    # print(im_data.min(), im_data.max(), im_data.dtype, im_data.shape)
-    # print(out_im_data.min(), out_im_data.max(), out_im_data.dtype, out_im_data.shape)
-    # proper_cv = cv.resize(im_data, None, None, ratio, ratio, cv.INTER_CUBIC)
-    # proper_skimage = skimage.util.img_as_ubyte(
-    #     skimage.transform.rescale(im_data, ratio, channel_axis=-1, order=3)
-    # )
-    # # # print(proper.min(), proper.max(), proper.dtype, proper.shape)
-
-    # fig, ax = plt.subplots(nrows=4, ncols=2)
-    # ax[0, 0].imshow(im_data)
-    # ax[0, 0].set_title("Original")
-    # ax[0, 1].imshow(out_im_data)
-    # ax[0, 1].set_title("My scale")
-
-    # ax[1, 0].set_title("Proper OpenCV")
-    # ax[1, 0].imshow(proper_cv)
-    # ax[1, 1].set_title("Proper Skimage")
-    # ax[1, 1].imshow(proper_cv)
-
-    # print("my scale vs proper_cv psnr:", cv.PSNR(out_im_data, proper_cv))
-
-    # ax[2, 0].set_title("Absdiff OpenCV vs My")
-    # diffy_cv = cv.absdiff(out_im_data, proper_cv)
-    # ax[2, 0].imshow(diffy_cv)
-    # ax[2, 1].set_title("Absdiff Skimage vs My")
-    # diffy_skimage = cv.absdiff(out_im_data, proper_skimage)
-    # ax[2, 1].imshow(diffy_skimage)
-
-    # ax[3, 0].set_title("diffy-cv nonzero locations")
-    # nz = np.zeros(diffy_cv.shape, np.uint8)
-    # for a, b, c in zip(*diffy_cv.nonzero()):
-    #     # print(a, b, c)
-    #     nz[a, b, c] = 255
-    # print(nz)
-    # ax[3, 0].imshow(nz)
-    # ax[3, 1].set_title("Absdiff CV vs Skimage")
-    # ax[3, 1].imshow(cv.absdiff(proper_cv, proper_skimage))
-
-    # print(
-    #     "diffy_cv",
-    #     diffy_cv.min(),
-    #     diffy_cv.max(),
-    #     diffy_cv.dtype,
-    #     diffy_cv.shape,
-    #     diffy_cv.nonzero(),
-    # )
-    # print(
-    #     "diffy_skimage",
-    #     diffy_skimage.min(),
-    #     diffy_skimage.max(),
-    #     diffy_skimage.dtype,
-    #     diffy_skimage.shape,
-    # )
-    # print(
-    #     "proper_skimage vs proper_opencv psnr:",
-    #     cv.PSNR(out_im_data, proper_cv),
-    #     cv.absdiff(proper_cv, proper_skimage).max(),
-    # )
-    # plt.show()
 
 
 if __name__ == "__main__":
@@ -282,8 +224,8 @@ if __name__ == "__main__":
     )
     arg_parser.add_argument("in_file", type=pathlib.Path)
     arg_parser.add_argument("out_file", type=pathlib.Path, nargs="?")
-    arg_parser.add_argument("scaling_ratio", type=float, nargs="?", default=2.0)
+    arg_parser.add_argument("-s", "--scale", type=float, nargs="?", default=2.0)
 
     args = arg_parser.parse_args()
 
-    main(args.in_file, args.out_file, args.scaling_ratio)
+    main(args.in_file, args.out_file, args.scale)
