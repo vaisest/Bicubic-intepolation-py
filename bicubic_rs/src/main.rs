@@ -30,22 +30,37 @@ fn bicubic(_s: f32) -> f32 {
 }
 
 fn pad(img: &Rgb32FImage) -> Rgb32FImage {
+    // pad by copying border
     let mut dest: Rgb32FImage = Rgb32FImage::new(img.width() + 4, img.height() + 4);
 
     for y in 0..2 {
-        for x in 0..2 {
-            dest.put_pixel(x, y, *img.get_pixel(0, 0));
-        }
-        for x in img.width()..img.width() + 2 {
-            dest.put_pixel(x, y, *img.get_pixel(0, 0));
+        // top
+        for x in 0..dest.width() {
+            dest.put_pixel(x, y, *img.get_pixel((x - 2).clamp(0, img.width() - 1), 0));
         }
     }
-    for y in img.height()..img.height() + 2 {
+    for y in 2..img.height() {
+        // left
         for x in 0..2 {
-            dest.put_pixel(x, y, *img.get_pixel(0, 0));
+            dest.put_pixel(x, y, *img.get_pixel(0, (y - 2).clamp(0, img.height() - 1)));
         }
-        for x in img.width()..img.width() + 2 {
-            dest.put_pixel(x, y, *img.get_pixel(0, 0));
+        // right
+        for x in img.width()..dest.width() {
+            dest.put_pixel(
+                x,
+                y,
+                *img.get_pixel(img.width() - 1, (y - 2).clamp(0, img.height() - 1)),
+            );
+        }
+    }
+    for y in img.height()..dest.height() {
+        // bottom
+        for x in 0..dest.width() {
+            dest.put_pixel(
+                x,
+                y,
+                *img.get_pixel((x - 2).clamp(0, img.width() - 1), img.height() - 1),
+            );
         }
     }
 
@@ -55,7 +70,7 @@ fn pad(img: &Rgb32FImage) -> Rgb32FImage {
 }
 
 // #[inline(never)] TODO: TEST PADDING SPEED
-pub fn scale<F>(img: &Rgb32FImage, ratio: f32, u: F) -> Rgb32FImage
+pub unsafe fn scale<F>(img: &Rgb32FImage, ratio: f32, u: F) -> Rgb32FImage
 where
     F: Fn(f32) -> f32,
 {
