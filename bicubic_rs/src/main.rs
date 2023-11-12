@@ -1,5 +1,5 @@
 use image::io::Reader as ImgReader;
-use image::{DynamicImage, Pixel, Rgb, Rgb32FImage};
+use image::{DynamicImage, GenericImage, GenericImageView, Pixel, Rgb, Rgb32FImage};
 use std::path::PathBuf;
 use std::time::Instant;
 use structopt::StructOpt;
@@ -17,6 +17,7 @@ struct Opt {
     ratio: f32,
 }
 
+// #[inline(never)]
 fn bicubic(_s: f32) -> f32 {
     let a = -0.5f32;
     let s = _s.abs();
@@ -28,7 +29,8 @@ fn bicubic(_s: f32) -> f32 {
     return 0.0;
 }
 
-fn scale<F>(img: &Rgb32FImage, ratio: f32, u: F) -> Rgb32FImage
+// #[inline(never)] TODO: TEST PADDING SPEED
+pub fn scale<F>(img: &Rgb32FImage, ratio: f32, u: F) -> Rgb32FImage
 where
     F: Fn(f32) -> f32,
 {
@@ -70,10 +72,77 @@ where
     return dest;
 }
 
+pub unsafe fn scaledpad<F>(img: &Rgb32FImage, ratio: f32, u: F) -> Rgb32FImage
+where
+    F: Fn(f32) -> f32,
+{
+    let new_w = (((img.width() - 4) as f32) * ratio) as u32;
+    let new_h = (((img.height() - 4) as f32) * ratio) as u32;
+
+    let mut dest = Rgb32FImage::new(new_w, new_h);
+    // let mut vec: Vec<f32> = Vec::with_capacity((new_h * new_w) as usize);
+    for j in 0..new_h {
+        let y = (j as f32 + 0.5) * (1.0 / ratio) - 0.5 + 2.0;
+        let iy = y as i32;
+        let decy = y.trunc() - y;
+
+        for i in 0..new_w {
+            let x = (i as f32 + 0.5) * (1.0 / ratio) - 0.5 + 2.0;
+            let ix = x as i32;
+            let decx = x.trunc() - x;
+
+            let mut pix = [0.0, 0.0, 0.0];
+            for m in -1i32..=2 {
+                for l in -1i32..=2 {
+                    let v = img
+                        .unsafe_get_pixel((ix + l) as u32, (iy + m) as u32)
+                        .map(|v| v * u(decx + l as f32) * u(decy + m as f32));
+                    pix[0] += v[0];
+                    pix[1] += v[1];
+                    pix[2] += v[2];
+                }
+
+                // vec.push(pix[2].clamp(0.0, 1.0));
+                // vec.push(pix[1].clamp(0.0, 1.0));
+                // vec.push(pix[0].clamp(0.0, 1.0));
+                pix[0] = pix[0].clamp(0.0, 1.0);
+                pix[1] = pix[1].clamp(0.0, 1.0);
+                pix[2] = pix[2].clamp(0.0, 1.0);
+                dest.unsafe_put_pixel(i, j, Rgb(pix));
+            }
+        }
+    }
+    // let dest = Rgb32FImage::from_raw(new_w, new_h, vec).expect("scale panic, should never happen");
+    return dest;
+}
+
+fn pad(img: &Rgb32FImage) -> Rgb32FImage {
+    let mut dest: Rgb32FImage = Rgb32FImage::new(img.width() + 4, img.height() + 4);
+
+    for y in 0..2 {
+        for x in 0..2 {
+            dest.put_pixel(x, y, *img.get_pixel(0, 0));
+        }
+        for x in img.width()..img.width() + 2 {
+            dest.put_pixel(x, y, *img.get_pixel(0, 0));
+        }
+    }
+    for y in img.height()..img.height() + 2 {
+        for x in 0..2 {
+            dest.put_pixel(x, y, *img.get_pixel(0, 0));
+        }
+        for x in img.width()..img.width() + 2 {
+            dest.put_pixel(x, y, *img.get_pixel(0, 0));
+        }
+    }
+
+    dest.copy_from(img, 2, 2).expect("pad panic");
+
+    return dest;
+}
+
 fn main() {
     let opt = Opt::from_args();
-
-    let timer = Instant::now();
 
     let input_img = ImgReader::open(&opt.input_path)
         .expect("Could not load input image")
@@ -89,12 +158,24 @@ fn main() {
         (input_img.height() as f32 * opt.ratio) as u32
     );
 
-    let scaled = scale(&input_img, opt.ratio, bicubic);
+    let timer = Instant::now();
 
+    let padded = pad(&input_img);
+    let scaled: Rgb32FImage;
+    unsafe {
+        scaled = scaledpad(&padded, opt.ratio, bicubic);
+    }
     println!(
         "Finished scaling in {:?} seconds",
         timer.elapsed().as_secs_f32()
     );
+    // let timer = Instant::now();
+    // let scaled = scale(&input_img, opt.ratio, bicubic);
+
+    // println!(
+    //     "Finished scaling in {:?} seconds",
+    //     timer.elapsed().as_secs_f32()
+    // );
 
     (DynamicImage::ImageRgb32F(scaled).into_rgb8())
         .save(opt.output_path)
