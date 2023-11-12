@@ -90,19 +90,18 @@ where
             let mut pix = [0.0, 0.0, 0.0];
             for m in -1i32..=2 {
                 for l in -1i32..=2 {
-                    let v = img
-                        .unsafe_get_pixel((ix + l) as u32, (iy + m) as u32)
-                        .map(|v| v * u(decx + l as f32) * u(decy + m as f32));
-                    pix[0] += v[0];
-                    pix[1] += v[1];
-                    pix[2] += v[2];
-                }
+                    let p = img.unsafe_get_pixel((ix + l) as u32, (iy + m) as u32);
+                    let v = p.channels();
 
-                pix[0] = pix[0].clamp(0.0, 1.0);
-                pix[1] = pix[1].clamp(0.0, 1.0);
-                pix[2] = pix[2].clamp(0.0, 1.0);
-                dest.unsafe_put_pixel(i, j, Rgb(pix));
+                    pix[0] += v[0] * u(decx + l as f32) * u(decy + m as f32);
+                    pix[1] += v[1] * u(decx + l as f32) * u(decy + m as f32);
+                    pix[2] += v[2] * u(decx + l as f32) * u(decy + m as f32);
+                }
             }
+            pix[0] = pix[0].clamp(0.0, 1.0);
+            pix[1] = pix[1].clamp(0.0, 1.0);
+            pix[2] = pix[2].clamp(0.0, 1.0);
+            dest.unsafe_put_pixel(i, j, Rgb(pix));
         }
     }
     return dest;
@@ -132,6 +131,7 @@ fn main() {
     unsafe {
         scaled = scale_padded(&padded, opt.ratio, bicubic);
     }
+
     println!(
         "Finished scaling in {:?} seconds",
         timer.elapsed().as_secs_f32()
