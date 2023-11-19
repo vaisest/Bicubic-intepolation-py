@@ -112,18 +112,12 @@ where
                         p = img.unsafe_get_pixel((ix + l) as u32, (iy + m) as u32).0;
                     }
 
-                    // // way slower?
-                    // pix.iter_mut().zip(p.iter()).for_each(|(pixv, pv)| {
-                    //     *pixv += (*pv) * u(decx + l as f32) * u(decy + m as f32)
-                    // })
-
                     pix[0] += p[0] * u(decx + l as f32) * u(decy + m as f32);
                     pix[1] += p[1] * u(decx + l as f32) * u(decy + m as f32);
                     pix[2] += p[2] * u(decx + l as f32) * u(decy + m as f32);
                     pix[3] += p[3] * u(decx + l as f32) * u(decy + m as f32);
                 }
             }
-            // pix.iter_mut().for_each(|p| *p = (*p).clamp(0.0, 1.0));
 
             pix[0] = pix[0].clamp(0.0, 1.0);
             pix[1] = pix[1].clamp(0.0, 1.0);
