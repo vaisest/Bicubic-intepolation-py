@@ -1,5 +1,5 @@
 use image::io::Reader as ImgReader;
-use image::{DynamicImage, GenericImage, GenericImageView, Pixel, Rgba, Rgba32FImage};
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, Rgba, Rgba32FImage};
 use std::path::PathBuf;
 use std::time::Instant;
 use structopt::StructOpt;
@@ -84,20 +84,21 @@ fn pad(img: &Rgba32FImage) -> Rgba32FImage {
 }
 
 // unsafe because input should be padded where oob is not possible
-pub unsafe fn scale_padded<F>(img: &Rgba32FImage, ratio: f32, u: F) -> Rgba32FImage
+pub fn scale_padded<F>(img: &Rgba32FImage, ratio: f32, u: F) -> Rgba32FImage
 where
     F: Fn(f32) -> f32,
 {
     let new_w = (((img.width() - 4) as f32) * ratio) as u32;
     let new_h = (((img.height() - 4) as f32) * ratio) as u32;
 
-    let mut dest = Rgba32FImage::new(new_w, new_h);
-    for j in 0..new_h {
+    let mut dest = ImageBuffer::new(new_w, new_h);
+
+    for j in 0..dest.height() {
         let y = (j as f32 + 0.5) * (1.0 / ratio) - 0.5 + 2.0;
         let iy = y as i32;
         let decy = y.trunc() - y;
 
-        for i in 0..new_w {
+        for i in 0..dest.width() {
             let x = (i as f32 + 0.5) * (1.0 / ratio) - 0.5 + 2.0;
             let ix = x as i32;
             let decx = x.trunc() - x;
@@ -105,18 +106,31 @@ where
             let mut pix = [0.0f32; 4];
             for m in -1i32..=2 {
                 for l in -1i32..=2 {
-                    let p = img.unsafe_get_pixel((ix + l) as u32, (iy + m) as u32);
-                    let v = p.channels();
+                    let p: [f32; 4];
+                    // Safe, source image is treated as a padded image
+                    unsafe {
+                        p = img.unsafe_get_pixel((ix + l) as u32, (iy + m) as u32).0;
+                    }
 
-                    pix[0] += v[0] * u(decx + l as f32) * u(decy + m as f32);
-                    pix[1] += v[1] * u(decx + l as f32) * u(decy + m as f32);
-                    pix[2] += v[2] * u(decx + l as f32) * u(decy + m as f32);
+                    // // way slower?
+                    // pix.iter_mut().zip(p.iter()).for_each(|(pixv, pv)| {
+                    //     *pixv += (*pv) * u(decx + l as f32) * u(decy + m as f32)
+                    // })
+
+                    pix[0] += p[0] * u(decx + l as f32) * u(decy + m as f32);
+                    pix[1] += p[1] * u(decx + l as f32) * u(decy + m as f32);
+                    pix[2] += p[2] * u(decx + l as f32) * u(decy + m as f32);
+                    pix[3] += p[3] * u(decx + l as f32) * u(decy + m as f32);
                 }
             }
+            // pix.iter_mut().for_each(|p| *p = (*p).clamp(0.0, 1.0));
+
             pix[0] = pix[0].clamp(0.0, 1.0);
             pix[1] = pix[1].clamp(0.0, 1.0);
             pix[2] = pix[2].clamp(0.0, 1.0);
-            dest.unsafe_put_pixel(i, j, Rgba(pix));
+            pix[3] = pix[3].clamp(0.0, 1.0);
+
+            dest.put_pixel(i, j, Rgba(pix));
         }
     }
     return dest;
@@ -143,9 +157,7 @@ fn main() {
 
     let padded = pad(&input_img);
     let scaled: Rgba32FImage;
-    unsafe {
-        scaled = scale_padded(&padded, opt.ratio, bicubic);
-    }
+    scaled = scale_padded(&padded, opt.ratio, bicubic);
 
     println!(
         "Finished scaling in {:?} seconds",
