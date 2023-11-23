@@ -5,13 +5,11 @@ import pathlib
 import time
 from functools import cache
 from itertools import repeat
-from typing import Callable, TypeVar
+from typing import Callable
 from functools import partial
 
 import cv2 as cv
 import numpy as np
-import skimage
-import matplotlib.pyplot as plt
 
 
 def bilinear(s: float) -> float:
