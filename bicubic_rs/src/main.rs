@@ -1,5 +1,6 @@
 use image::io::Reader as ImgReader;
 use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, Rgba, Rgba32FImage};
+use std::f32::consts::PI;
 use std::path::PathBuf;
 use std::time::Instant;
 use structopt::StructOpt;
@@ -17,16 +18,81 @@ struct Opt {
     ratio: f32,
 }
 
-//TODO: rest of the filters
-fn bicubic(_s: f32) -> f32 {
+#[allow(dead_code)]
+// nearest neighbor kernel
+fn nn(s: f32) -> f32 {
+    if -0.5 <= s && s < 0.5 {
+        return 1.0;
+    }
+    return 0.0;
+}
+
+#[allow(dead_code)]
+// linear kernel
+fn bilinear(mut s: f32) -> f32 {
+    s = s.abs();
+    if 0.0 <= s && s < 1.0 {
+        return 1.0 - s;
+    }
+    return 0.0;
+}
+
+#[allow(dead_code)]
+// bicubic kernel, aka catmull-rom spline
+fn bicubic(mut s: f32) -> f32 {
     let a = -0.5f32;
-    let s = _s.abs();
+    s = s.abs();
     if 0.0 <= s && s < 1.0 {
         return (a + 2.0) * s.powf(3.0) - (a + 3.0) * s.powf(2.0) + 1.0;
     } else if 1.0 <= s && s < 2.0 {
         return a * s.powf(3.0) - 5.0 * a * s.powf(2.0) + 8.0 * a * s - 4.0 * a;
     }
     return 0.0;
+}
+
+#[allow(dead_code)]
+fn mn(b: f32, c: f32, mut x: f32) -> f32 {
+    x = x.abs();
+
+    if x < 1.0 {
+        return (1.0 / 6.0)
+            * ((12.0 - 9.0 * b - 6.0 * c) * x.powi(3)
+                + (-18.0 + 12.0 * b + 6.0 * c) * x.powi(2)
+                + (6.0 - 2.0 * b));
+    } else if x < 2.0 {
+        return (1.0 / 6.0)
+            * ((-b - 6.0 * c) * x.powi(3)
+                + (6.0 * b + 30.0 * c) * x.powi(2)
+                + (-12.0 * b - 48.0 * c) * x
+                + (8.0 * b + 24.0 * c));
+    } else {
+        return 0.0;
+    }
+}
+
+#[allow(dead_code)]
+// mitchell-netravali filter
+fn mitchell_netravali(b: f32, c: f32) -> impl Fn(f32) -> f32 {
+    move |x| mn(b, c, x)
+}
+
+fn sinc(mut x: f32) -> f32 {
+    // normalized sinc to be exact
+    if x == 0.0 {
+        return 1.0;
+    }
+    x *= PI;
+    return x.sin() / x;
+}
+#[allow(dead_code)]
+// lanczos kernel aka sinc filter, with window size 2
+fn lanczos2(x: f32) -> f32 {
+    let a = 2.0f32;
+    if -a < x && x < a {
+        return sinc(x) * sinc(x / a);
+    } else {
+        return 0.0;
+    }
 }
 
 fn pad(img: &Rgba32FImage) -> Rgba32FImage {
@@ -84,7 +150,7 @@ fn pad(img: &Rgba32FImage) -> Rgba32FImage {
 }
 
 // unsafe because input should be padded where oob is not possible
-pub fn scale_padded<F>(img: &Rgba32FImage, ratio: f32, u: F) -> Rgba32FImage
+pub fn scale_padded<F>(img: &Rgba32FImage, ratio: f32, kernel: F) -> Rgba32FImage
 where
     F: Fn(f32) -> f32,
 {
@@ -112,10 +178,10 @@ where
                         p = img.unsafe_get_pixel((ix + l) as u32, (iy + m) as u32).0;
                     }
 
-                    pix[0] += p[0] * u(decx + l as f32) * u(decy + m as f32);
-                    pix[1] += p[1] * u(decx + l as f32) * u(decy + m as f32);
-                    pix[2] += p[2] * u(decx + l as f32) * u(decy + m as f32);
-                    pix[3] += p[3] * u(decx + l as f32) * u(decy + m as f32);
+                    pix[0] += p[0] * kernel(decx + l as f32) * kernel(decy + m as f32);
+                    pix[1] += p[1] * kernel(decx + l as f32) * kernel(decy + m as f32);
+                    pix[2] += p[2] * kernel(decx + l as f32) * kernel(decy + m as f32);
+                    pix[3] += p[3] * kernel(decx + l as f32) * kernel(decy + m as f32);
                 }
             }
 
