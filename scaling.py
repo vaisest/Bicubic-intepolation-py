@@ -71,7 +71,7 @@ def mitchell_netravali(B: float, C: float) -> Callable[[float], float]:
 
     # It should be noted that the catmull-rom spline too
     # can be represented with this with values B=0 and C=0.5.
-    # More specifically when B=0, C is just the -a value in Keys' kernel u
+    # More specifically when B=0, C is just the -a value in the catmull-rom spline
 
     return partial(mn, B, C)
 
@@ -79,6 +79,7 @@ def mitchell_netravali(B: float, C: float) -> Callable[[float], float]:
 def lanczos(x: float) -> float:
     # lancozs kernel, which is more specifically
     # a sinc filter windowed to a smaller size (here 2)
+    # Causes box artefacts for some reason. I am unable to find the reason.
     a = 2
     if -a < x < a:
         return float(np.sinc(x) * np.sinc(x / a))
@@ -90,7 +91,8 @@ def plot_kernels(*kernels: Callable[[float], float]):
 
     xs = np.linspace(-4, 4, 500)
     for kernel in kernels:
-        plt.plot(xs, [kernel(x) for x in xs], label=kernel.__name__)
+        func_name = kernel.__name__ if hasattr(kernel, "__name__") else "unknown"
+        plt.plot(xs, [kernel(x) for x in xs], label=func_name)
     plt.xlim(-4, 4)
     plt.legend()
     plt.grid(True)
@@ -165,14 +167,13 @@ def main(in_file: pathlib.Path, out_file: pathlib.Path, ratio: float):
 
     start = time.perf_counter()
 
-    # plot_kernels(bicubic, l, nn, lanczos, mitchell_netravali(B=0, C=0.75))
+    # plot_kernels(bicubic, bilinear, nn, lanczos, mitchell_netravali(B=0, C=0.75))
 
     H, W, C = im_data.shape
 
-    print(f"Scaling image from {H}x{W} to {int(H*ratio)}x{int(W*ratio)}...")
+    print(f"Scaling image from {W}x{H} to {int(W*ratio)}x{int(H*ratio)}...")
 
     padded = cv.copyMakeBorder(im_data, 2, 2, 2, 2, cv.BORDER_REPLICATE)
-    padded = im_data
 
     channels = cv.split(padded)
 
