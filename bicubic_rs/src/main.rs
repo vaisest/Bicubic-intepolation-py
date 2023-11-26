@@ -31,7 +31,7 @@ fn nn(s: f32) -> f32 {
 // linear kernel
 fn bilinear(mut s: f32) -> f32 {
     s = s.abs();
-    if 0.0 <= s && s < 1.0 {
+    if s < 1.0 {
         return 1.0 - s;
     }
     return 0.0;
@@ -159,38 +159,76 @@ where
 
     let mut dest = ImageBuffer::new(new_w, new_h);
 
-    for j in 0..dest.height() {
-        let y = (j as f32 + 0.5) * (1.0 / ratio) - 0.5 + 2.0;
-        let iy = y as i32;
-        let decy = y.trunc() - y;
+    // if integer downsample
+    if (1.0 / ratio) % 2.0 == 0.0 {
+        // how many times larger `img` is compared to `dest`
+        // side length of each square
+        let mult = (1.0 / ratio) as u32;
+        // area of average square
+        let area = mult.pow(2) as f32;
+        println!("{:?}, {:?}", mult, area);
 
-        for i in 0..dest.width() {
-            let x = (i as f32 + 0.5) * (1.0 / ratio) - 0.5 + 2.0;
-            let ix = x as i32;
-            let decx = x.trunc() - x;
+        for j in 0..dest.height() {
+            // calculate index to the jth square and account for padding
+            let y = j * mult + 2;
 
-            let mut pix = [0.0f32; 4];
-            for m in -1i32..=2 {
-                for l in -1i32..=2 {
-                    let p: [f32; 4];
-                    // Safe, source image is treated as a padded image
-                    unsafe {
-                        p = img.unsafe_get_pixel((ix + l) as u32, (iy + m) as u32).0;
+            for i in 0..dest.width() {
+                let x = i * mult + 2;
+
+                let mut pix = [0.0f32; 4];
+                for m in 0..mult {
+                    for l in 0..mult {
+                        let p = img.get_pixel(x + l, y + m);
+                        pix[0] += p[0];
+                        pix[1] += p[1];
+                        pix[2] += p[2];
+                        pix[3] += p[3];
                     }
-
-                    pix[0] += p[0] * kernel(decx + l as f32) * kernel(decy + m as f32);
-                    pix[1] += p[1] * kernel(decx + l as f32) * kernel(decy + m as f32);
-                    pix[2] += p[2] * kernel(decx + l as f32) * kernel(decy + m as f32);
-                    pix[3] += p[3] * kernel(decx + l as f32) * kernel(decy + m as f32);
                 }
+
+                // average pixels back to the range [0, 1]
+                pix[0] /= area;
+                pix[1] /= area;
+                pix[2] /= area;
+                pix[3] /= area;
+
+                dest.put_pixel(i, j, Rgba(pix));
             }
+        }
+    } else {
+        for j in 0..dest.height() {
+            let y = (j as f32 + 0.5) * (1.0 / ratio) - 0.5 + 2.0;
+            let iy = y as i32;
+            let decy = y.trunc() - y;
 
-            pix[0] = pix[0].clamp(0.0, 1.0);
-            pix[1] = pix[1].clamp(0.0, 1.0);
-            pix[2] = pix[2].clamp(0.0, 1.0);
-            pix[3] = pix[3].clamp(0.0, 1.0);
+            for i in 0..dest.width() {
+                let x = (i as f32 + 0.5) * (1.0 / ratio) - 0.5 + 2.0;
+                let ix = x as i32;
+                let decx = x.trunc() - x;
 
-            dest.put_pixel(i, j, Rgba(pix));
+                let mut pix = [0.0f32; 4];
+                for m in -1i32..=2 {
+                    for l in -1i32..=2 {
+                        let p: [f32; 4];
+                        // Safe, source image is treated as a padded image
+                        unsafe {
+                            p = img.unsafe_get_pixel((ix + l) as u32, (iy + m) as u32).0;
+                        }
+
+                        pix[0] += p[0] * kernel(decx + l as f32) * kernel(decy + m as f32);
+                        pix[1] += p[1] * kernel(decx + l as f32) * kernel(decy + m as f32);
+                        pix[2] += p[2] * kernel(decx + l as f32) * kernel(decy + m as f32);
+                        pix[3] += p[3] * kernel(decx + l as f32) * kernel(decy + m as f32);
+                    }
+                }
+
+                pix[0] = pix[0].clamp(0.0, 1.0);
+                pix[1] = pix[1].clamp(0.0, 1.0);
+                pix[2] = pix[2].clamp(0.0, 1.0);
+                pix[3] = pix[3].clamp(0.0, 1.0);
+
+                dest.put_pixel(i, j, Rgba(pix));
+            }
         }
     }
     return dest;
