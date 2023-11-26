@@ -201,6 +201,8 @@ fn main() {
 
     let input_img = ImgReader::open(&opt.input_path)
         .expect("Could not load input image")
+        .with_guessed_format()
+        .expect("Could not determine input image format")
         .decode()
         .expect("Could not decode image")
         .into_rgba32f();
@@ -216,6 +218,7 @@ fn main() {
     let timer = Instant::now();
 
     let padded = pad(&input_img);
+    drop(input_img);
     let scaled: Rgba32FImage;
     scaled = scale_padded(&padded, opt.ratio, bicubic);
 
