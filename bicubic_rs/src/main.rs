@@ -144,7 +144,8 @@ fn pad(img: &Rgba32FImage) -> Rgba32FImage {
         }
     }
 
-    dest.copy_from(img, 2, 2).expect("pad panic");
+    dest.copy_from(img, 2, 2)
+        .expect("pad panic, should not be possible");
 
     return dest;
 }
@@ -154,8 +155,18 @@ pub fn scale_padded<F>(img: &Rgba32FImage, ratio: f32, kernel: F) -> Rgba32FImag
 where
     F: Fn(f32) -> f32,
 {
+    // for algorithm comments refer to python code
     let new_w = (((img.width() - 4) as f32) * ratio) as u32;
     let new_h = (((img.height() - 4) as f32) * ratio) as u32;
+
+    assert!(
+        new_w >= 1,
+        "resulting image width has to be 1 or more pixels"
+    );
+    assert!(
+        new_h >= 1,
+        "resulting image height has to be 1 or more pixels"
+    );
 
     let mut dest = ImageBuffer::new(new_w, new_h);
 
